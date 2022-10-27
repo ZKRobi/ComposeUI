@@ -24,11 +24,10 @@ internal class ModuleLoader : IModuleLoader
     private readonly IModuleCatalogue _moduleCatalogue;
 
 
-    public ModuleLoader(IModuleCatalogue moduleCatalogue, IModuleHostFactory moduleHostFactory)
+    internal ModuleLoader(IModuleCatalogue moduleCatalogue, IModuleHostFactory moduleHostFactory)
     {
         _moduleCatalogue = moduleCatalogue;
         _moduleHostFactory = moduleHostFactory;
-
     }
 
     public void RequestStartProcess(LaunchRequest request)
@@ -59,6 +58,19 @@ internal class ModuleLoader : IModuleLoader
             throw new Exception("Unknown process name");
         }
         await module.Teardown();
+    }
+
+    internal async Task StartMessageRouter()
+    {
+        var host = _moduleHostFactory.CreateModuleHost(
+            new ModuleManifest()
+            {
+                StartupType = "dotnetcore",
+                UIType = "none",
+                Name = "messageRouter",
+                Path = "..\\..\\..\\..\\..\\Messaging\\Server\\bin\\Debug\\net6.0\\MorganStanley.ComposeUI.Tryouts.Messaging.Server.dll"
+            }, Guid.Empty);
+        await host.Launch();
     }
 
     private void ForwardLifecycleEvents(LifecycleEvent lifecycleEvent)

@@ -28,9 +28,6 @@ internal class ModuleHostFactory : IModuleHostFactory
             case (StartupType.DotNetCore):
                 runner = new DotNetCoreRunner(manifest.Path, manifest.Arguments);
                 break;
-            case (StartupType.SelfHostedWebApp):
-                runner = new ComposeHostedWebApp(manifest.Path, manifest.Port.Value);
-                break;
             case (StartupType.None):
                 runner = null;
                 break;

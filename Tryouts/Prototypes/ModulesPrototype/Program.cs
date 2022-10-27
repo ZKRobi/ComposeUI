@@ -30,7 +30,7 @@ internal static class Program
         var catalogue = new ModuleCatalogue(manifest);
 
         var factory = new ModuleLoaderFactory();
-        var loader = factory.Create(catalogue);
+        var loader = await factory.Create(catalogue);
         int canExit = 0;
 
         loader.LifecycleEvents.Subscribe(e =>
