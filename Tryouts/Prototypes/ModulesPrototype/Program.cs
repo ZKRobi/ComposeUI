@@ -22,8 +22,14 @@ namespace MorganStanley.ComposeUI.Prototypes.ModulesPrototype;
 
 internal static class Program
 {
+    private static Process _chartServer;
+
     public static async Task Main(string[] args)
     {
+        await StartChartServer();
+
+        Task.Delay(2000);
+
         var manifestString = File.ReadAllText("manifest.json");
         var manifest = JsonSerializer.Deserialize<Dictionary<string, ModuleManifest>>(manifestString);
 
@@ -78,12 +84,40 @@ internal static class Program
             await Task.Delay(TimeSpan.FromMilliseconds(200));
         }
 
-        Console.WriteLine("Bye, ComposeUI!");
+
+        StopChartServer();
+        Console.WriteLine("Bye, ComposeUI!");        
     }
 
     private static void StartBrowser(string url)
     {
 
         Process.Start(@"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", url);
+    }
+
+    /// <summary>
+    /// Starts the chart web server to simulate an externally hosted web app
+    /// </summary>
+    private static async Task StartChartServer()
+    {
+        _chartServer = new Process();
+        _chartServer.StartInfo.FileName = "cmd.exe";
+        _chartServer.StartInfo.WorkingDirectory = "..\\..\\..\\..\\..\\Plugins\\ApplicationPlugins\\chart\\src";
+        _chartServer.StartInfo.RedirectStandardInput = true;
+        _chartServer.StartInfo.RedirectStandardOutput = true;
+        _chartServer.StartInfo.UseShellExecute = false;
+        _chartServer.Start();
+        _chartServer.StandardInput.WriteLine("npm run serve -- --port 8080");
+
+        while (!_chartServer.StandardOutput.ReadLine().Contains("CTRL-C"))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }        
+    }
+
+    private static void StopChartServer()
+    {
+        _chartServer.StandardInput.WriteLine("\x3");
+
     }
 }

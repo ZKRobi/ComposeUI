@@ -60,19 +60,6 @@ internal class ModuleLoader : IModuleLoader
         await module.Teardown();
     }
 
-    internal async Task StartMessageRouter()
-    {
-        var host = _moduleHostFactory.CreateModuleHost(
-            new ModuleManifest()
-            {
-                StartupType = "dotnetcore",
-                UIType = "none",
-                Name = "messageRouter",
-                Path = "..\\..\\..\\..\\..\\Messaging\\Server\\bin\\Debug\\net6.0\\MorganStanley.ComposeUI.Tryouts.Messaging.Server.dll"
-            }, Guid.Empty);
-        await host.Launch();
-    }
-
     private void ForwardLifecycleEvents(LifecycleEvent lifecycleEvent)
     {
         _lifecycleEvents.OnNext(lifecycleEvent);

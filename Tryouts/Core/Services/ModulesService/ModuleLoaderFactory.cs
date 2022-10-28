@@ -17,8 +17,7 @@ namespace MorganStanley.ComposeUI.Tryouts.Core.Services.ModulesService
     {
         public async Task<IModuleLoader> Create(ModuleCatalogue catalogue)
         {
-            var moduleLoader = new ModuleLoader(catalogue, new ModuleHostFactory());
-            await moduleLoader.StartMessageRouter();
+            var moduleLoader = new ModuleLoader(catalogue, new ModuleHostFactory());            
             return moduleLoader;
         }
     }
