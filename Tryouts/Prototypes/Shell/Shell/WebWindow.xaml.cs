@@ -19,9 +19,9 @@ public partial class WebWindow : Window
         InitializeComponent();
 
         // TODO: When no title is set from options, we should show the HTML document's title instead
-        Title = options.Title ?? WebWindowOptions.DefaultTitle;
-        Width = options.Width ?? WebWindowOptions.DefaultWidth;
-        Height = options.Height ?? WebWindowOptions.DefaultHeight;
+        Title = options.Title!;
+        Width = options.Width!.Value;
+        Height = options.Height!.Value;
         TrySetIconUrl(options);
 
         _ = InitializeAsync();
@@ -59,7 +59,7 @@ public partial class WebWindow : Window
             return;
 
         // TODO: What's the default URL if the app is running from a manifest? We should probably not allow relative urls in that case.
-        var appUrl = new Uri(webWindowOptions.Url ?? WebWindowOptions.DefaultUrl);
+        var appUrl = new Uri(webWindowOptions.Url!);
 
         var iconUrl = webWindowOptions.IconUrl != null
             ? new Uri(webWindowOptions.IconUrl, UriKind.RelativeOrAbsolute)

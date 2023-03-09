@@ -5,25 +5,18 @@
     <TargetFramework>net6.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
-	<EnableDefaultPageItems>false</EnableDefaultPageItems>
-	<LangVersion>preview</LangVersion>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <LangVersion>preview</LangVersion>
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Remove="MainWindow.xaml" />
-    <None Remove="WebWindow.xaml" />
-  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.1" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.1462.37" />
-	<PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
 
   <ItemGroup>
-    <Page Include="WebWindow.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </Page>
+    <Page Include="WebWindow.xaml" />
     <Page Include="MainWindow.xaml" />
   </ItemGroup>
 
@@ -37,11 +30,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Utilities\" />
+    <ProjectReference Include="..\..\..\Messaging\Server\MorganStanley.ComposeUI.Messaging.Server.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\Messaging\Server\MorganStanley.ComposeUI.Messaging.Server.csproj" />
-  </ItemGroup> 
-
 </Project>
+ 
