@@ -75,14 +75,14 @@ internal sealed class ModuleCatalog : IModuleCatalog, IInitializeAsync
     private static readonly JsonSerializerOptions JsonSerializerOptions =
         new() {Converters = {new ModuleManifestConverter()}};
 
-    private class ModuleManifest : IModuleManifest
+    internal class ModuleManifest : IModuleManifest
     {
         public string Id { get; set; }
         public string Name { get; set; }
         public string ModuleType { get; set; }
     }
 
-    private class WebModuleManifest : ModuleManifest, IModuleManifest<WebManifestDetails>
+    internal class WebModuleManifest : ModuleManifest, IModuleManifest<WebManifestDetails>
     {
         public WebManifestDetails GetDetails()
         {
