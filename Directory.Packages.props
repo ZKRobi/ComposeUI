@@ -58,5 +58,6 @@
     <PackageVersion Include="xunit.extensibility.execution" Version="2.4.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.4.5" />
     <PackageVersion Include="xunit" Version="2.4.2" />
+    <PackageVersion Include="Infragistics.WPF.DockManager" Version="23.1.23" />
   </ItemGroup>
 </Project>
