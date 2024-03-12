@@ -19,6 +19,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Web.WebView2.WinForms;
 using MorganStanley.ComposeUI.ModuleLoader;
 
 namespace MorganStanley.ComposeUI.Shell.Modules;
@@ -70,15 +71,10 @@ internal sealed class ModuleService : IHostedService
             await _application.Dispatcher.InvokeAsync(
                 () =>
                 {
-                    var window = _application.CreateWindow<WebWindow>(
-                        e.Instance,
-                        webWindowOptions ?? new WebWindowOptions
-                        {
-                            Url = properties.Url.ToString(),
-                            IconUrl = properties.IconUrl?.ToString()
-                        });
-
-                    window.Show();
+                    var webView = new WebView2()
+                    {
+                        Source = properties.Url
+                    };
                 });
         }
         catch (Exception ex)

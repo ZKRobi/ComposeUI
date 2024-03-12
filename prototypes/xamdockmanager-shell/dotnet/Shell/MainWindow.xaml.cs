@@ -17,6 +17,8 @@ using System.Windows;
 using System.Windows.Controls.Ribbon;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Infragistics.Windows.DockManager;
+using Microsoft.Web.WebView2.WinForms;
 using MorganStanley.ComposeUI.ModuleLoader;
 using MorganStanley.ComposeUI.Shell.ImageSource;
 
@@ -62,7 +64,7 @@ public partial class MainWindow : RibbonWindow
 
     internal MainWindowViewModel ViewModel
     {
-        get => (MainWindowViewModel) DataContext;
+        get => (MainWindowViewModel)DataContext;
         private set => DataContext = value;
     }
 
@@ -74,7 +76,10 @@ public partial class MainWindow : RibbonWindow
                 DataContext: ModuleViewModel module
             })
         {
-            await _moduleLoader.StartModule(new StartRequest(module.Manifest.Id));
+            // This is a super quick and dirty hack.
+                        module.Manifest.TryGetDetails<WebManifestDetails>(out var props);
+            var content = new WebView2() { Source = props.Url };
+            Layout.AddContent(module.Manifest.Name, module.Manifest.Id, content);
         }
     }
 

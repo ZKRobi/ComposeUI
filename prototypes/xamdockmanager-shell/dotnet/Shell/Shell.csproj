@@ -12,13 +12,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<None Remove="MainWindow.xaml" />
-		<None Remove="WebWindow.xaml" />
-		<None Remove="Layout\DockWindow.xaml" />
+	  <None Remove="Layout\DockManager.xaml" />
 	</ItemGroup>
-	
+
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Mvvm" />
+		<PackageReference Include="Infragistics.WPF.DockManager" />
 		<PackageReference Include="Microsoft.Extensions.Hosting" />
 		<PackageReference Include="Microsoft.Extensions.Http" />
 		<PackageReference Include="Microsoft.Web.WebView2" />
@@ -26,10 +25,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<Page Include="Layout\DockManager.xaml" />
 		<Page Include="WebWindow.xaml">
-			<Generator>MSBuild:Compile</Generator>
-		</Page>
-		<Page Include="Layout\DockWindow.xaml">
 			<Generator>MSBuild:Compile</Generator>
 		</Page>
 		<Page Include="MainWindow.xaml" />
@@ -39,15 +36,18 @@
 		<None Update="appsettings.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
+		<Page Update="Layout\DockManager.xaml">
+		  <Generator>MSBuild:Compile</Generator>
+		</Page>
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="$(RelativeRoot)\..\..\..\fdc3\dotnet\AppDirectory\src\AppDirectory\AppDirectory.csproj" />
-		<ProjectReference Include="$(RelativeRoot)\..\..\..\fdc3\dotnet\DesktopAgent\src\DesktopAgent\DesktopAgent.csproj" />
-		<ProjectReference Include="$(RelativeRoot)\..\..\..\messaging\dotnet\src\Host\MorganStanley.ComposeUI.Messaging.Host.csproj" />
-		<ProjectReference Include="$(RelativeRoot)\..\..\..\module-loader\dotnet\src\MorganStanley.ComposeUI.ModuleLoader.Abstractions\MorganStanley.ComposeUI.ModuleLoader.Abstractions.csproj" />
-		<ProjectReference Include="$(RelativeRoot)\..\..\..\module-loader\dotnet\src\MorganStanley.ComposeUI.ModuleLoader\MorganStanley.ComposeUI.ModuleLoader.csproj" />
-		<ProjectReference Include="$(RelativeRoot)\..\..\..\shared\dotnet\src\MorganStanley.ComposeUI.Utilities\MorganStanley.ComposeUI.Utilities.csproj" />
+		<ProjectReference Include="..\..\..\..\src\fdc3\dotnet\AppDirectory\src\AppDirectory\AppDirectory.csproj" />
+		<ProjectReference Include="..\..\..\..\src\fdc3\dotnet\DesktopAgent\src\DesktopAgent\DesktopAgent.csproj" />
+		<ProjectReference Include="..\..\..\..\src\messaging\dotnet\src\Host\MorganStanley.ComposeUI.Messaging.Host.csproj" />
+		<ProjectReference Include="..\..\..\..\src\module-loader\dotnet\src\MorganStanley.ComposeUI.ModuleLoader.Abstractions\MorganStanley.ComposeUI.ModuleLoader.Abstractions.csproj" />
+		<ProjectReference Include="..\..\..\..\src\module-loader\dotnet\src\MorganStanley.ComposeUI.ModuleLoader\MorganStanley.ComposeUI.ModuleLoader.csproj" />
+		<ProjectReference Include="..\..\..\..\src\shared\dotnet\src\MorganStanley.ComposeUI.Utilities\MorganStanley.ComposeUI.Utilities.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
