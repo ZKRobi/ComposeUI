@@ -15,6 +15,7 @@
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Contracts;
 using MorganStanley.ComposeUI.Messaging.Abstractions;
 using Finos.Fdc3.Context;
+using MorganStanley.ComposeUI.Fdc3.MorganStanley.ComposeUI.DesktopAgent.Channels;
 
 namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Tests;
 
