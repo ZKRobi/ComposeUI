@@ -11,9 +11,10 @@
 // and limitations under the License.
 
 using System.Text.Json;
-using MorganStanley.ComposeUI.Messaging.Abstractions;
 
-namespace MorganStanley.ComposeUI.Messaging;
+// Using the Abstractions namespace to avoid unnecessary using statements
+// ReSharper disable once CheckNamespace
+namespace MorganStanley.ComposeUI.Messaging.Abstractions;
 
 /// <summary>
 /// Extensions methods for handling JSON data in <see cref="MessageBuffer"/> objects.
