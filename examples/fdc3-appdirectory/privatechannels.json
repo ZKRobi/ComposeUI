@@ -12,26 +12,26 @@
       }
     },
     {
-      "appId": "js-grid",
-      "name": "Js Datagrid Example",
+      "appId": "js-pricing",
+      "name": "Pricing Example",
       "type": "web",
       "details": {
-        "url": "http://localhost:4200/"
+        "url": "http://localhost:8080/"
       },
       "interop": {
         "intents": {
           "listensFor": {},
           "raises": {
-            "ViewChart": [
-              "fdc3.instrument"
+            "StartChat": [
+              "fdc3.startChat"
             ]
           }
         }
       }
     },
     {
-      "appId": "js-chart",
-      "name": "Js Chart Example",
+      "appId": "js-chat",
+      "name": "Js Chat Example",
       "type": "web",
       "details": {
         "url": "http://localhost:8080/"
@@ -39,11 +39,11 @@
       "interop": {
         "intents": {
           "listensFor": {
-            "ViewChart": {
-              "name": "ViewChart",
-              "displayName": "ViewChart",
+            "StartChat": {
+              "name": "StartChat",
+              "displayName": "StartChat",
               "contexts": [
-                "fdc3.instrument"
+                "fdc3.startChat"
               ]
             }
           }

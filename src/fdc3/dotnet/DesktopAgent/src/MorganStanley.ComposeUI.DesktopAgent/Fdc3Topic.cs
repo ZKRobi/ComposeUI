@@ -28,6 +28,7 @@ internal static class Fdc3Topic
     internal static string GetIntentResult => TopicRoot + "getIntentResult";
     internal static string SendIntentResult => TopicRoot + "sendIntentResult";
     internal static string AddIntentListener => TopicRoot + "addIntentListener";
+    internal static string CreatePrivateChannel => TopicRoot + "createPrivateChannel";
 
     //IntentListeners will be listening at this endpoint
     internal static string RaiseIntentResolution(string intent, string instanceId)

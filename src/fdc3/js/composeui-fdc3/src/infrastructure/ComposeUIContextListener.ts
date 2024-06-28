@@ -53,7 +53,7 @@ export class ComposeUIContextListener implements Listener {
     public async handleContextMessage(context: Context | null = null): Promise<void> {
 
         if (!this.isSubscribed) {
-            throw new Error("The current listener is not subscribed."));
+            throw new Error("The current listener is not subscribed.");
         }
         if (context) {
             return this.handler(context);
