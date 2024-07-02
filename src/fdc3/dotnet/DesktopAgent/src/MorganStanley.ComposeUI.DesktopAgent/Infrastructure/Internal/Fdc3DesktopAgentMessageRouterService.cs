@@ -47,6 +47,7 @@ internal class Fdc3DesktopAgentMessageRouterService : IHostedService
             new IconJsonConverter(),
             new ImageJsonConverter(),
             new IntentMetadataJsonConverter(),
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
         }
     };
 

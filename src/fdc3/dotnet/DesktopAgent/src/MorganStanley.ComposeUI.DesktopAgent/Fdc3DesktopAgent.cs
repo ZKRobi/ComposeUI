@@ -453,7 +453,7 @@ internal class Fdc3DesktopAgent : IFdc3DesktopAgentBridge
         var runningApplications = apps.Where(app => app.InstanceId != null).ToArray();
         if (runningApplications.Length >= 1)
         {
-            for (var i = 0; i <= runningApplications.Length; i++)
+            for (var i = 0; i < runningApplications.Length; i++)
             {
                 var application = runningApplications[i];
                 if (await IsIntentListenerRegisteredAsync(application))
