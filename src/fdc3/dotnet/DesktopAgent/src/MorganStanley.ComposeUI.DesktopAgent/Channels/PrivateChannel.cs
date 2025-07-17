@@ -14,15 +14,13 @@
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using MorganStanley.ComposeUI.Messaging;
-using MorganStanley.ComposeUI.Messaging.Abstractions;
-using System.Reactive.Linq;
+using MorganStanley.ComposeUI.MessagingAdapter.Abstractions;
 
 namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Channels;
 
-internal class PrivateChannel : Channel, IAsyncDisposable
+internal class PrivateChannel : Channel
 {
-    public PrivateChannel(string id, IMessagingService messagingService, ILogger<PrivateChannel>? logger, string instanceId)
+    public PrivateChannel(string id, IMessaging messagingService, ILogger<PrivateChannel>? logger, string instanceId)
         : base(id, messagingService, (ILogger?) logger ?? NullLogger.Instance, Fdc3Topic.PrivateChannel(id))
     {
         InstanceId = instanceId;
@@ -39,18 +37,16 @@ internal class PrivateChannel : Channel, IAsyncDisposable
 
         var subscription = await MessagingService.SubscribeAsync(topic, async buffer =>
         {
-            var message = buffer.GetString();
-
-            if (!message.Contains("disconnected"))
+            if (buffer == null || !buffer.Contains("disconnected"))
             {
-                LogUnexpectedMessage(message);
+                LogUnexpectedMessage(buffer ?? string.Empty);
             }
 
             tcs.TrySetResult(true);
             await Task.CompletedTask;
         }, cancellationToken);
 
-        await MessagingService.PublishAsync(topic, MessageBuffer.Create(payload), cancellationToken: cancellationToken);
+        await MessagingService.PublishAsync(topic, payload, cancellationToken: cancellationToken);
 
         using (cancellationToken.Register(() => tcs.TrySetCanceled()))
         {

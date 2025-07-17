@@ -17,12 +17,12 @@ using Finos.Fdc3;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Contracts;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Converters;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Infrastructure.Internal;
-using MorganStanley.ComposeUI.Messaging.Abstractions;
+using MorganStanley.ComposeUI.MessagingAdapter.Abstractions;
 using AppMetadata = MorganStanley.ComposeUI.Fdc3.DesktopAgent.Protocol.AppMetadata;
 
 namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Tests.Infrastructure.Internal;
 
-public class ResolverUIMessageRouterCommunicatorTests
+public class ResolverUICommunicatorTests
 {
     private readonly JsonSerializerOptions _jsonSerializerOptions = new()
     {
@@ -32,18 +32,18 @@ public class ResolverUIMessageRouterCommunicatorTests
     [Fact]
     public async Task SendResolverUIRequest_will_return_null()
     {
-        var messageRouterMock = new Mock<IMessageRouter>();
-        messageRouterMock.Setup(
+        var messagingMock = new Mock<IMessaging>();
+        messagingMock.Setup(
                 _ => _.InvokeAsync(
                     It.IsAny<string>(),
-                    It.IsAny<MessageBuffer>(),
+                    It.IsAny<string?>(),
                     It.IsAny<InvokeOptions>(),
                     It.IsAny<CancellationToken>()))
             .Returns(null);
 
-        var resolverUIMessageRouterCommunicator = new ResolverUIMessageRouterCommunicator(messageRouterMock.Object, null);
+        var resolverUICommunicator = new ResolverUICommunicator(messagingMock.Object, null);
 
-        var response = await resolverUIMessageRouterCommunicator.SendResolverUIRequest(It.IsAny<IEnumerable<IAppMetadata>>());
+        var response = await resolverUICommunicator.SendResolverUIRequest(It.IsAny<IEnumerable<IAppMetadata>>());
 
         response.Should().BeNull();
     }
@@ -51,22 +51,22 @@ public class ResolverUIMessageRouterCommunicatorTests
     [Fact]
     public async Task SendResolverUIRequest_will_return_response()
     {
-        var messageRouterMock = new Mock<IMessageRouter>();
-        messageRouterMock.Setup(
+        var messagingMock = new Mock<IMessaging>();
+        messagingMock.Setup(
                 _ => _.InvokeAsync(
                     It.IsAny<string>(),
-                    It.IsAny<MessageBuffer>(),
+                    It.IsAny<string?>(),
                     It.IsAny<InvokeOptions>(),
                     It.IsAny<CancellationToken>()))
-            .Returns(ValueTask.FromResult<IMessageBuffer?>(
-                MessageBuffer.Factory.CreateJson(new ResolverUIResponse()
+            .Returns(ValueTask.FromResult<string?>(
+                JsonFactory.CreateJson(new ResolverUIResponse()
                 {
                     AppMetadata = new AppMetadata() { AppId = "testAppId" }
                 }, _jsonSerializerOptions)));
 
-        var resolverUIMessageRouterCommunicator = new ResolverUIMessageRouterCommunicator(messageRouterMock.Object, null);
+        var resolverUICommunicator = new ResolverUICommunicator(messagingMock.Object, null);
 
-        var response = await resolverUIMessageRouterCommunicator.SendResolverUIRequest(It.IsAny<IEnumerable<IAppMetadata>>());
+        var response = await resolverUICommunicator.SendResolverUIRequest(It.IsAny<IEnumerable<IAppMetadata>>());
 
         response.Should().NotBeNull();
         response!.AppMetadata.Should().NotBeNull();

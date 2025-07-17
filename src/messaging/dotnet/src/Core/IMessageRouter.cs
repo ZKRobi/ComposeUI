@@ -17,7 +17,7 @@ namespace MorganStanley.ComposeUI.Messaging;
 /// <summary>
 ///     Message Router client interface.
 /// </summary>
-public interface IMessageRouter : IMessagingService, IAsyncDisposable
+public interface IMessageRouter : IMessagingService
 { 
     /// <summary>
     ///     Registers a service by providing a name and handler.
@@ -27,7 +27,7 @@ public interface IMessageRouter : IMessagingService, IAsyncDisposable
     /// <param name="descriptor"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    ValueTask RegisterServiceAsync(
+    public ValueTask RegisterServiceAsync(
         string endpoint,
         MessageHandler handler,
         EndpointDescriptor? descriptor = null,
@@ -41,7 +41,7 @@ public interface IMessageRouter : IMessagingService, IAsyncDisposable
     /// <param name="descriptor"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    ValueTask RegisterEndpointAsync(
+    public ValueTask RegisterEndpointAsync(
         string endpoint,
         MessageHandler handler,
         EndpointDescriptor? descriptor = null,
@@ -54,7 +54,7 @@ public interface IMessageRouter : IMessagingService, IAsyncDisposable
     /// <param name="subscriber"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    ValueTask<IAsyncDisposable> SubscribeAsync(
+    public ValueTask<IAsyncDisposable> SubscribeAsync(
         string topic,
         IAsyncObserver<TopicMessage> subscriber,
         CancellationToken cancellationToken = default);
@@ -65,5 +65,5 @@ public interface IMessageRouter : IMessagingService, IAsyncDisposable
     /// <param name="endpoint"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    ValueTask UnregisterEndpointAsync(string endpoint, CancellationToken cancellationToken = default);
+    public ValueTask UnregisterEndpointAsync(string endpoint, CancellationToken cancellationToken = default);
 }

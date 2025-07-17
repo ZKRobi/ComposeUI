@@ -12,7 +12,6 @@
  * and limitations under the License.
  */
 
-
 using System.Text.Json;
 using Finos.Fdc3;
 using Finos.Fdc3.Context;
@@ -23,24 +22,21 @@ using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Exceptions;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Infrastructure.Internal;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Tests.Helpers;
 using MorganStanley.ComposeUI.Messaging.Client.WebSocket;
-using MorganStanley.ComposeUI.Messaging.Abstractions;
+using MorganStanley.ComposeUI.MessagingAdapter.Abstractions;
 using MorganStanley.ComposeUI.ModuleLoader;
+using static MorganStanley.ComposeUI.Fdc3.DesktopAgent.Tests.TestData.TestAppDirectoryData;
 using AppIdentifier = MorganStanley.ComposeUI.Fdc3.DesktopAgent.Protocol.AppIdentifier;
 using AppIntent = MorganStanley.ComposeUI.Fdc3.DesktopAgent.Protocol.AppIntent;
 using AppMetadata = MorganStanley.ComposeUI.Fdc3.DesktopAgent.Protocol.AppMetadata;
-using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Protocol;
 using DisplayMetadata = MorganStanley.ComposeUI.Fdc3.DesktopAgent.Protocol.DisplayMetadata;
-using Icon = MorganStanley.ComposeUI.Fdc3.DesktopAgent.Protocol.Icon;
 using ImplementationMetadata = MorganStanley.ComposeUI.Fdc3.DesktopAgent.Protocol.ImplementationMetadata;
-using static MorganStanley.ComposeUI.Fdc3.DesktopAgent.Tests.TestData.TestAppDirectoryData;
-using System.Runtime.CompilerServices;
 
 namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Tests;
 
 public class EndToEndTests : IAsyncLifetime
 {
     private const string TestChannel = "fdc3.channel.1";
-    private readonly List<IModuleInstance> _runningApps = new();
+    private readonly List<IModuleInstance> _runningApps = [];
     private readonly object _runningAppsLock = new();
     private readonly ChannelTopics _topics = Fdc3Topic.UserChannel(TestChannel);
     private readonly Uri _webSocketUri = new("ws://localhost:7098/ws");
@@ -48,23 +44,23 @@ public class EndToEndTests : IAsyncLifetime
 
     private int _counter;
     private IHost _host;
-    private IMessageRouter _messageRouter;
+    private IMessaging _messaging;
     private IModuleLoader _moduleLoader;
     private JsonSerializerOptions _options;
     private IDisposable _runningAppsObserver;
 
-    private MessageBuffer EmptyContextType => MessageBuffer.Factory.CreateJson(new GetCurrentContextRequest());
+    private string EmptyContextType => JsonFactory.CreateJson(new GetCurrentContextRequest());
 
-    private MessageBuffer ContextType =>
-        MessageBuffer.Factory.CreateJson(new GetCurrentContextRequest { ContextType = new Contact().Type });
+    private string ContextType =>
+        JsonFactory.CreateJson(new GetCurrentContextRequest { ContextType = new Contact().Type });
 
-    private MessageBuffer OtherContextType =>
-        MessageBuffer.Factory.CreateJson(new GetCurrentContextRequest { ContextType = new Email(null).Type });
+    private string OtherContextType =>
+        JsonFactory.CreateJson(new GetCurrentContextRequest { ContextType = new Email(null).Type });
 
-    private MessageBuffer FindRequest => MessageBuffer.Factory.CreateJson(
+    private string FindRequest => JsonFactory.CreateJson(
         new FindChannelRequest { ChannelId = TestChannel, ChannelType = ChannelType.User });
 
-    private MessageBuffer FindNonExistingRequest => MessageBuffer.Factory.CreateJson(
+    private string FindNonExistingRequest => JsonFactory.CreateJson(
         new FindChannelRequest { ChannelId = "nonexisting", ChannelType = ChannelType.User });
 
     public async Task InitializeAsync()
@@ -95,6 +91,8 @@ public class EndToEndTests : IAsyncLifetime
                         fdc3.Configure(builder => { builder.ChannelId = TestChannel; });
                         fdc3.UseMessageRouter();
                     });
+
+                services.AddMessageRouterMessagingAdapter();
             });
 
         _host = builder.Build();
@@ -108,9 +106,10 @@ public class EndToEndTests : IAsyncLifetime
                     {
                         Uri = _webSocketUri
                     }))
+            .AddMessageRouterMessagingAdapter()
             .BuildServiceProvider();
 
-        _messageRouter = _clientServices.GetRequiredService<IMessageRouter>();
+        _messaging = _clientServices.GetRequiredService<IMessaging>();
 
         _moduleLoader = _host.Services.GetRequiredService<IModuleLoader>();
 
@@ -132,10 +131,10 @@ public class EndToEndTests : IAsyncLifetime
                 }
             });
 
-        var fdc3DesktopAgentMessageRouterService =
-            _host.Services.GetRequiredService<IHostedService>() as Fdc3DesktopAgentMessageRouterService;
+        var fdc3DesktopAgentMessagingService =
+            _host.Services.GetRequiredService<IHostedService>() as Fdc3DesktopAgentMessagingService;
 
-        _options = fdc3DesktopAgentMessageRouterService!.JsonMessageSerializerOptions;
+        _options = fdc3DesktopAgentMessagingService!.JsonMessageSerializerOptions;
     }
 
     public async Task DisposeAsync()
@@ -158,22 +157,22 @@ public class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async void GetCurrentContextReturnsNullBeforeBroadcast()
+    public async Task GetCurrentContextReturnsNullBeforeBroadcast()
     {
-        var resultBuffer = await _messageRouter.InvokeAsync(_topics.GetCurrentContext, EmptyContextType);
+        var resultBuffer = await _messaging.InvokeAsync(_topics.GetCurrentContext, EmptyContextType);
         resultBuffer.Should().BeNull();
     }
 
     [Fact]
-    public async void GetCurrentContextReturnsAfterBroadcast()
+    public async Task GetCurrentContextReturnsAfterBroadcast()
     {
         var ctx = GetContext();
 
-        await _messageRouter.PublishAsync(_topics.Broadcast, ctx);
+        await _messaging.PublishAsync(_topics.Broadcast, ctx);
 
         await Task.Delay(100);
 
-        var resultBuffer = await _messageRouter.InvokeAsync(_topics.GetCurrentContext, ContextType);
+        var resultBuffer = await _messaging.InvokeAsync(_topics.GetCurrentContext, ContextType);
 
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<Contact>();
@@ -182,15 +181,15 @@ public class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async void GetCurrentContextReturnsAfterBroadcastWithNoType()
+    public async Task GetCurrentContextReturnsAfterBroadcastWithNoType()
     {
         var ctx = GetContext();
 
-        await _messageRouter.PublishAsync(_topics.Broadcast, ctx);
+        await _messaging.PublishAsync(_topics.Broadcast, ctx);
 
         await Task.Delay(100);
 
-        var resultBuffer = await _messageRouter.InvokeAsync(_topics.GetCurrentContext, EmptyContextType);
+        var resultBuffer = await _messaging.InvokeAsync(_topics.GetCurrentContext, EmptyContextType);
 
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<Contact>();
@@ -199,28 +198,28 @@ public class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
-    public async void DifferentGetCurrentContextReturnsNullAfterBroadcast()
+    public async Task DifferentGetCurrentContextReturnsNullAfterBroadcast()
     {
         var ctx = GetContext();
-        await _messageRouter.PublishAsync(_topics.Broadcast, ctx);
+        await _messaging.PublishAsync(_topics.Broadcast, ctx);
         await Task.Delay(100);
-        var resultBuffer = await _messageRouter.InvokeAsync(_topics.GetCurrentContext, OtherContextType);
+        var resultBuffer = await _messaging.InvokeAsync(_topics.GetCurrentContext, OtherContextType);
         resultBuffer.Should().BeNull();
     }
 
     [Fact]
-    public async void FindUserChannelReturnsFoundTrueForExistingChannel()
+    public async Task FindUserChannelReturnsFoundTrueForExistingChannel()
     {
-        var resultBuffer = await _messageRouter.InvokeAsync(Fdc3Topic.FindChannel, FindRequest);
+        var resultBuffer = await _messaging.InvokeAsync(Fdc3Topic.FindChannel, FindRequest);
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindChannelResponse>(_options);
         result.Should().BeEquivalentTo(FindChannelResponse.Success);
     }
 
     [Fact]
-    public async void FindUserChannelReturnsNoChannelFoundForNonExistingChannel()
+    public async Task FindUserChannelReturnsNoChannelFoundForNonExistingChannel()
     {
-        var resultBuffer = await _messageRouter.InvokeAsync(Fdc3Topic.FindChannel, FindNonExistingRequest);
+        var resultBuffer = await _messaging.InvokeAsync(Fdc3Topic.FindChannel, FindNonExistingRequest);
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindChannelResponse>(_options);
         result.Should().BeEquivalentTo(FindChannelResponse.Failure(ChannelError.NoChannelFound));
@@ -233,9 +232,9 @@ public class EndToEndTests : IAsyncLifetime
         var instance = await _moduleLoader.StartModule(new StartRequest(App1.AppId));
         var originFdc3InstanceId = Fdc3InstanceIdRetriever.Get(instance);
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
-            Fdc3Topic.CreateAppChannel, 
-            MessageBuffer.Factory.CreateJson(
+        var resultBuffer = await _messaging.InvokeAsync(
+            Fdc3Topic.CreateAppChannel,
+            JsonFactory.CreateJson(
                 new CreateAppChannelRequest()
                 {
                     ChannelId = null,
@@ -266,17 +265,17 @@ public class EndToEndTests : IAsyncLifetime
             AppIntent = new AppIntent
             {
                 Intent = Intent2,
-                Apps = new AppMetadata[]
-                {
+                Apps =
+                [
                     App2,
                     App3ForIntent2
-                }
+                ]
             }
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.FindIntent,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindIntentResponse>(_options);
         result.Should().NotBeNull();
@@ -291,7 +290,7 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.IntentDeliveryFailed
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(Fdc3Topic.FindIntent);
+        var resultBuffer = await _messaging.InvokeAsync(Fdc3Topic.FindIntent);
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindIntentResponse>(_options);
         result.Should().NotBeNull();
@@ -315,9 +314,9 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.NoAppsFound
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.FindIntent,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindIntentResponse>(_options);
         result.Should().NotBeNull();
@@ -345,9 +344,9 @@ public class EndToEndTests : IAsyncLifetime
                         App1
             };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.FindIntentsByContext,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindIntentsByContextResponse>(_options);
         result.Should().NotBeNull();
@@ -373,30 +372,30 @@ public class EndToEndTests : IAsyncLifetime
 
         var expectedResponse = new FindIntentsByContextResponse
         {
-            AppIntents = new[]
-            {
+            AppIntents =
+            [
                 new AppIntent
                 {
                     Intent = Intent2,
-                    Apps = new[]
-                    {
+                    Apps =
+                    [
                         App2
-                    }
+                    ]
                 },
                 new AppIntent
                 {
                     Intent = Intent3,
-                    Apps = new[]
-                    {
+                    Apps =
+                    [
                         App3ForIntent3
-                    }
+                    ]
                 }
-            }
+            ]
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.FindIntentsByContext,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindIntentsByContextResponse>(_options);
         result.Should().NotBeNull();
@@ -411,7 +410,7 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.IntentDeliveryFailed
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(Fdc3Topic.FindIntentsByContext);
+        var resultBuffer = await _messaging.InvokeAsync(Fdc3Topic.FindIntentsByContext);
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindIntentsByContextResponse>(_options);
         result.Should().NotBeNull();
@@ -436,9 +435,9 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.NoAppsFound
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.FindIntentsByContext,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<FindIntentsByContextResponse>(_options);
         result.Should().NotBeNull();
@@ -453,7 +452,7 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.IntentDeliveryFailed
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(Fdc3Topic.RaiseIntent);
+        var resultBuffer = await _messaging.InvokeAsync(Fdc3Topic.RaiseIntent);
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<RaiseIntentResponse>(_options);
         result.Should().NotBeNull();
@@ -479,9 +478,9 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.NoAppsFound
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.RaiseIntent,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<RaiseIntentResponse>(_options);
         result.Should().NotBeNull();
@@ -497,7 +496,7 @@ public class EndToEndTests : IAsyncLifetime
         var targetFdc3InstanceId = Fdc3InstanceIdRetriever.Get(target);
 
         var addIntentListenerRequest =
-            MessageBuffer.Factory.CreateJson(
+            JsonFactory.CreateJson(
                 new IntentListenerRequest
                 {
                     Intent = Intent2.Name,
@@ -506,7 +505,7 @@ public class EndToEndTests : IAsyncLifetime
                 },
                 _options);
 
-        var addIntentListenerResult = await _messageRouter.InvokeAsync(
+        var addIntentListenerResult = await _messaging.InvokeAsync(
             Fdc3Topic.AddIntentListener,
             addIntentListenerRequest);
         addIntentListenerResult.Should().NotBeNull();
@@ -523,9 +522,9 @@ public class EndToEndTests : IAsyncLifetime
             TargetAppIdentifier = new AppIdentifier { AppId = App2.AppId, InstanceId = targetFdc3InstanceId }
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.RaiseIntent,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<RaiseIntentResponse>(_options);
@@ -550,7 +549,7 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.IntentDeliveryFailed
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(Fdc3Topic.SendIntentResult);
+        var resultBuffer = await _messaging.InvokeAsync(Fdc3Topic.SendIntentResult);
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<StoreIntentResultResponse>(_options);
         result!.Should().BeEquivalentTo(expectedResponse);
@@ -572,9 +571,9 @@ public class EndToEndTests : IAsyncLifetime
             State = SubscribeState.Subscribe
         };
 
-        var addIntentListenerBuffer = await _messageRouter.InvokeAsync(
+        var addIntentListenerBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.AddIntentListener,
-            MessageBuffer.Factory.CreateJson(addIntentListenerRequest, _options));
+            JsonFactory.CreateJson(addIntentListenerRequest, _options));
 
         addIntentListenerBuffer.Should().NotBeNull();
         var addIntentListenerResponse = addIntentListenerBuffer!.ReadJson<IntentListenerResponse>(_options);
@@ -589,9 +588,9 @@ public class EndToEndTests : IAsyncLifetime
             TargetAppIdentifier = new AppIdentifier { AppId = App2.AppId, InstanceId = targetFdc3InstanceId }
         };
 
-        var raiseIntentResultBuffer = await _messageRouter.InvokeAsync(
+        var raiseIntentResultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.RaiseIntent,
-            MessageBuffer.Factory.CreateJson(raiseIntentRequest, _options));
+            JsonFactory.CreateJson(raiseIntentRequest, _options));
         raiseIntentResultBuffer.Should().NotBeNull();
         var raiseIntentResult = raiseIntentResultBuffer!.ReadJson<RaiseIntentResponse>(_options);
         raiseIntentResult!.AppMetadata.Should().NotBeNull();
@@ -617,9 +616,9 @@ public class EndToEndTests : IAsyncLifetime
         var app2Fdc3InstanceId = Fdc3InstanceIdRetriever.Get(app2);
         app2Fdc3InstanceId.Should().Be(raiseIntentResult!.AppMetadata!.InstanceId);
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.SendIntentResult,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<StoreIntentResultResponse>(_options);
         result!.Should().BeEquivalentTo(expectedResponse);
@@ -633,7 +632,7 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.IntentDeliveryFailed
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(Fdc3Topic.GetIntentResult);
+        var resultBuffer = await _messaging.InvokeAsync(Fdc3Topic.GetIntentResult);
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<GetIntentResultResponse>(_options);
         result!.Should().BeEquivalentTo(expectedResponse);
@@ -654,9 +653,9 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.IntentDeliveryFailed
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.GetIntentResult,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<GetIntentResultResponse>(_options);
         result!.Should().BeEquivalentTo(expectedResponse);
@@ -680,9 +679,9 @@ public class EndToEndTests : IAsyncLifetime
             Error = ResolveError.IntentDeliveryFailed
         };
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.GetIntentResult,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<GetIntentResultResponse>(_options);
         result!.Should().BeEquivalentTo(expectedResponse);
@@ -704,9 +703,9 @@ public class EndToEndTests : IAsyncLifetime
             State = SubscribeState.Subscribe
         };
 
-        var addIntentListenerBuffer = await _messageRouter.InvokeAsync(
+        var addIntentListenerBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.AddIntentListener,
-            MessageBuffer.Factory.CreateJson(addIntentListenerRequest, _options));
+            JsonFactory.CreateJson(addIntentListenerRequest, _options));
 
         addIntentListenerBuffer.Should().NotBeNull();
         var addIntentListenerResponse = addIntentListenerBuffer!.ReadJson<IntentListenerResponse>(_options);
@@ -721,9 +720,9 @@ public class EndToEndTests : IAsyncLifetime
             TargetAppIdentifier = new AppIdentifier { AppId = App2.AppId, InstanceId = targetFdc3InstanceId }
         };
 
-        var resultRaiseIntentBuffer = await _messageRouter.InvokeAsync(
+        var resultRaiseIntentBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.RaiseIntent,
-            MessageBuffer.Factory.CreateJson(raiseIntentRequest, _options));
+            JsonFactory.CreateJson(raiseIntentRequest, _options));
         var raiseIntentResult = resultRaiseIntentBuffer!.ReadJson<RaiseIntentResponse>(_options);
 
         var testContext = new Context(ResultType2);
@@ -737,9 +736,9 @@ public class EndToEndTests : IAsyncLifetime
             Context = testContext.AsJson()
         };
 
-        await _messageRouter.InvokeAsync(
+        await _messaging.InvokeAsync(
             Fdc3Topic.SendIntentResult,
-            MessageBuffer.Factory.CreateJson(storeIntentRequest, _options));
+            JsonFactory.CreateJson(storeIntentRequest, _options));
 
         var request = new GetIntentResultRequest
         {
@@ -758,9 +757,9 @@ public class EndToEndTests : IAsyncLifetime
         var app2Fdc3InstanceId = Fdc3InstanceIdRetriever.Get(app2);
         app2Fdc3InstanceId.Should().Be(raiseIntentResult!.AppMetadata!.InstanceId);
 
-        var resultBuffer = await _messageRouter.InvokeAsync(
+        var resultBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.GetIntentResult,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         resultBuffer.Should().NotBeNull();
         var result = resultBuffer!.ReadJson<GetIntentResultResponse>(_options);
         result!.Should().BeEquivalentTo(expectedResponse);
@@ -769,7 +768,7 @@ public class EndToEndTests : IAsyncLifetime
     [Fact]
     public async Task AddIntentListenerReturnsPayloadNullError()
     {
-        var result = await _messageRouter.InvokeAsync(Fdc3Topic.AddIntentListener);
+        var result = await _messaging.InvokeAsync(Fdc3Topic.AddIntentListener);
         result.Should().NotBeNull();
         result!.ReadJson<IntentListenerResponse>(_options)
             .Should()
@@ -783,9 +782,9 @@ public class EndToEndTests : IAsyncLifetime
         var originFdc3InstanceId = Fdc3InstanceIdRetriever.Get(instance);
         var request = new IntentListenerRequest
         { Intent = "dummy", Fdc3InstanceId = originFdc3InstanceId, State = SubscribeState.Unsubscribe };
-        var expectedResponse = await _messageRouter.InvokeAsync(
+        var expectedResponse = await _messaging.InvokeAsync(
             Fdc3Topic.AddIntentListener,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         expectedResponse.Should().NotBeNull();
         expectedResponse!.ReadJson<IntentListenerResponse>(_options)
             .Should()
@@ -803,7 +802,7 @@ public class EndToEndTests : IAsyncLifetime
         var target = await _moduleLoader.StartModule(new StartRequest("appId4"));
         var targetFdc3InstanceId = Fdc3InstanceIdRetriever.Get(target);
 
-        var addIntentListenerRequest = MessageBuffer.Factory.CreateJson(
+        var addIntentListenerRequest = JsonFactory.CreateJson(
             new IntentListenerRequest
             {
                 Intent = "intentWithNoResult",
@@ -812,7 +811,7 @@ public class EndToEndTests : IAsyncLifetime
             },
             _options);
 
-        var addIntentListenerResult = await _messageRouter.InvokeAsync(
+        var addIntentListenerResult = await _messaging.InvokeAsync(
             Fdc3Topic.AddIntentListener,
             addIntentListenerRequest);
 
@@ -821,7 +820,7 @@ public class EndToEndTests : IAsyncLifetime
         var addIntentListenerResponse = addIntentListenerResult!.ReadJson<IntentListenerResponse>(_options);
         addIntentListenerResponse!.Stored.Should().BeTrue();
 
-        var raiseIntentRequest = MessageBuffer.Factory.CreateJson(
+        var raiseIntentRequest = JsonFactory.CreateJson(
             new RaiseIntentRequest
             {
                 MessageId = 1,
@@ -832,7 +831,7 @@ public class EndToEndTests : IAsyncLifetime
             },
             _options);
 
-        var raiseIntentResult = await _messageRouter.InvokeAsync(Fdc3Topic.RaiseIntent, raiseIntentRequest);
+        var raiseIntentResult = await _messaging.InvokeAsync(Fdc3Topic.RaiseIntent, raiseIntentRequest);
 
         raiseIntentResult.Should().NotBeNull();
         var raiseIntentResponse = raiseIntentResult!.ReadJson<RaiseIntentResponse>(_options)!;
@@ -852,7 +851,7 @@ public class EndToEndTests : IAsyncLifetime
         var target = await _moduleLoader.StartModule(new StartRequest("appId4"));
         var targetFdc3InstanceId = Fdc3InstanceIdRetriever.Get(target);
 
-        var addIntentListenerRequest = MessageBuffer.Factory.CreateJson(
+        var addIntentListenerRequest = JsonFactory.CreateJson(
             new IntentListenerRequest
             {
                 Intent = "intentMetadataCustom",
@@ -861,7 +860,7 @@ public class EndToEndTests : IAsyncLifetime
             },
             _options);
 
-        var addIntentListenerResult = await _messageRouter.InvokeAsync(
+        var addIntentListenerResult = await _messaging.InvokeAsync(
             Fdc3Topic.AddIntentListener,
             addIntentListenerRequest);
         addIntentListenerResult.Should().NotBeNull();
@@ -877,7 +876,7 @@ public class EndToEndTests : IAsyncLifetime
         var target = await _moduleLoader.StartModule(new StartRequest("appId4"));
         var targetFdc3InstanceId = Fdc3InstanceIdRetriever.Get(target);
 
-        var addIntentListenerRequest = MessageBuffer.Factory.CreateJson(
+        var addIntentListenerRequest = JsonFactory.CreateJson(
             new IntentListenerRequest
             {
                 Intent = "intentMetadataCustom",
@@ -886,7 +885,7 @@ public class EndToEndTests : IAsyncLifetime
             },
             _options);
 
-        var addIntentListenerResult = await _messageRouter.InvokeAsync(
+        var addIntentListenerResult = await _messaging.InvokeAsync(
             Fdc3Topic.AddIntentListener,
             addIntentListenerRequest);
         addIntentListenerResult.Should().NotBeNull();
@@ -894,7 +893,7 @@ public class EndToEndTests : IAsyncLifetime
         var intentListenerResponse = addIntentListenerResult!.ReadJson<IntentListenerResponse>(_options);
         intentListenerResponse!.Stored.Should().BeTrue();
 
-        addIntentListenerRequest = MessageBuffer.Factory.CreateJson(
+        addIntentListenerRequest = JsonFactory.CreateJson(
             new IntentListenerRequest
             {
                 Intent = "intentMetadataCustom",
@@ -903,7 +902,7 @@ public class EndToEndTests : IAsyncLifetime
             },
             _options);
 
-        addIntentListenerResult = await _messageRouter.InvokeAsync(
+        addIntentListenerResult = await _messaging.InvokeAsync(
             Fdc3Topic.AddIntentListener,
             addIntentListenerRequest);
         addIntentListenerResult.Should().NotBeNull();
@@ -926,9 +925,9 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = instanceId
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.CreateAppChannel,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response?.ReadJson<CreateAppChannelResponse>(_options);
 
@@ -941,9 +940,9 @@ public class EndToEndTests : IAsyncLifetime
     public async Task AddAppChannelFailsWithNullRequest()
     {
         CreateAppChannelRequest? request = null;
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.CreateAppChannel,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
         var result = response?.ReadJson<CreateAppChannelResponse>(_options);
 
         result.Should().BeEquivalentTo(CreateAppChannelResponse.Failed(Fdc3DesktopAgentErrors.PayloadNull));
@@ -958,9 +957,9 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = Guid.NewGuid().ToString()
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.CreateAppChannel,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response?.ReadJson<CreateAppChannelResponse>(_options);
         result.Should().BeEquivalentTo(CreateAppChannelResponse.Failed(ChannelError.CreationFailed));
@@ -971,9 +970,9 @@ public class EndToEndTests : IAsyncLifetime
     {
         GetUserChannelsRequest? request = null;
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetUserChannels,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response!.ReadJson<GetUserChannelsResponse>(_options);
 
@@ -989,9 +988,9 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = "NotValidId"
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetUserChannels,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response!.ReadJson<GetUserChannelsResponse>(_options);
 
@@ -1007,9 +1006,9 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = Guid.NewGuid().ToString()
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetUserChannels,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response!.ReadJson<GetUserChannelsResponse>(_options);
 
@@ -1029,15 +1028,15 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = originFdc3InstanceId
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetUserChannels,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response!.ReadJson<GetUserChannelsResponse>(_options);
 
         result.Should().NotBeNull();
-        result.Should().BeEquivalentTo(GetUserChannelsResponse.Success(new List<ChannelItem>()
-        {
+        result.Should().BeEquivalentTo(GetUserChannelsResponse.Success(
+        [
             new() { Id = "fdc3.channel.1", Type = ChannelType.User, DisplayMetadata = new DisplayMetadata() { Name = "Channel 1", Color = "red", Glyph = "1" } },
             new() { Id = "fdc3.channel.2", Type = ChannelType.User, DisplayMetadata = new DisplayMetadata() { Name = "Channel 2", Color = "orange", Glyph = "2" } },
             new() { Id = "fdc3.channel.3", Type = ChannelType.User, DisplayMetadata = new DisplayMetadata() { Name = "Channel 3", Color = "yellow", Glyph = "3" } },
@@ -1046,9 +1045,8 @@ public class EndToEndTests : IAsyncLifetime
             new() { Id = "fdc3.channel.6", Type = ChannelType.User, DisplayMetadata = new DisplayMetadata() { Name = "Channel 6", Color = "blue", Glyph = "6" } },
             new() { Id = "fdc3.channel.7", Type = ChannelType.User, DisplayMetadata = new DisplayMetadata() { Name = "Channel 7", Color = "magenta", Glyph = "7" } },
             new() { Id = "fdc3.channel.8", Type = ChannelType.User, DisplayMetadata = new DisplayMetadata() { Name = "Channel 8", Color = "purple", Glyph = "8" } }
-        }));
+        ]));
     }
-
 
     [Fact]
     public async Task JoinUserChannelReturnsMissingId()
@@ -1059,9 +1057,9 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = "NotValidId"
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.JoinUserChannel,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response!.ReadJson<JoinUserChannelResponse>(_options);
 
@@ -1082,9 +1080,9 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = originFdc3InstanceId
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.JoinUserChannel,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response!.ReadJson<JoinUserChannelResponse>(_options);
 
@@ -1105,9 +1103,9 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = originFdc3InstanceId
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.JoinUserChannel,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var result = response!.ReadJson<JoinUserChannelResponse>(_options);
 
@@ -1127,9 +1125,9 @@ public class EndToEndTests : IAsyncLifetime
     {
         GetInfoRequest? request = null;
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetInfo,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1149,9 +1147,9 @@ public class EndToEndTests : IAsyncLifetime
             }
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetInfo,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1172,9 +1170,9 @@ public class EndToEndTests : IAsyncLifetime
             }
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetInfo,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1195,9 +1193,9 @@ public class EndToEndTests : IAsyncLifetime
             }
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetInfo,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1222,9 +1220,9 @@ public class EndToEndTests : IAsyncLifetime
             }
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetInfo,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1240,10 +1238,10 @@ public class EndToEndTests : IAsyncLifetime
                     AppId = App1.AppId,
                     InstanceId = instanceId,
                     Description = null,
-                    Icons = Enumerable.Empty<Icon>(),
+                    Icons = [],
                     Name = "app1",
                     ResultType = null,
-                    Screenshots = Enumerable.Empty<Screenshot>(),
+                    Screenshots = [],
                     Title = null,
                     Tooltip = null,
                     Version = null
@@ -1264,9 +1262,9 @@ public class EndToEndTests : IAsyncLifetime
     {
         FindInstancesRequest? request = null;
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.FindInstances,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1287,9 +1285,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = "notValidInstanceId",
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.FindInstances,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1310,9 +1308,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = Guid.NewGuid().ToString()
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.FindInstances,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1337,9 +1335,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = originFdc3InstanceId
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.FindInstances,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1364,9 +1362,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = originFdc3InstanceId
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.FindInstances,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1392,9 +1390,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = originFdc3InstanceId
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.FindInstances,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1409,9 +1407,9 @@ public class EndToEndTests : IAsyncLifetime
     {
         GetAppMetadataRequest? request = null;
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetAppMetadata,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1433,9 +1431,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = Guid.NewGuid().ToString(),
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetAppMetadata,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1462,9 +1460,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = originFdc3InstanceId,
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetAppMetadata,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1491,9 +1489,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = originFdc3InstanceId,
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetAppMetadata,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1520,9 +1518,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = originFdc3InstanceId,
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetAppMetadata,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1554,9 +1552,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = originFdc3InstanceId,
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetAppMetadata,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1582,9 +1580,9 @@ public class EndToEndTests : IAsyncLifetime
             Fdc3InstanceId = originFdc3InstanceId,
         };
 
-        var response = await _messageRouter.InvokeAsync(
+        var response = await _messaging.InvokeAsync(
             Fdc3Topic.GetAppMetadata,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         response.Should().NotBeNull();
 
@@ -1603,9 +1601,9 @@ public class EndToEndTests : IAsyncLifetime
     {
         AddContextListenerRequest? request = null;
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.AddContextListener,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<AddContextListenerResponse>(_options);
 
@@ -1623,9 +1621,9 @@ public class EndToEndTests : IAsyncLifetime
             ChannelType = ChannelType.User
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.AddContextListener,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<AddContextListenerResponse>(_options);
 
@@ -1647,9 +1645,9 @@ public class EndToEndTests : IAsyncLifetime
             ChannelType = ChannelType.User
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.AddContextListener,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<AddContextListenerResponse>(_options);
 
@@ -1662,9 +1660,9 @@ public class EndToEndTests : IAsyncLifetime
     {
         RemoveContextListenerRequest? request = null;
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.RemoveContextListener,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<RemoveContextListenerResponse>(_options);
 
@@ -1682,9 +1680,9 @@ public class EndToEndTests : IAsyncLifetime
             ListenerId = Guid.NewGuid().ToString(),
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.RemoveContextListener,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<RemoveContextListenerResponse>(_options);
 
@@ -1707,9 +1705,9 @@ public class EndToEndTests : IAsyncLifetime
             ContextType = "fdc3.instrument"
         };
 
-        var addContextListenerResult = await _messageRouter.InvokeAsync(
+        var addContextListenerResult = await _messaging.InvokeAsync(
             Fdc3Topic.AddContextListener,
-            MessageBuffer.Factory.CreateJson(addContextListenerRequest, _options));
+            JsonFactory.CreateJson(addContextListenerRequest, _options));
 
         var addContextListenerResponse = addContextListenerResult!.ReadJson<AddContextListenerResponse>(_options);
 
@@ -1723,9 +1721,9 @@ public class EndToEndTests : IAsyncLifetime
             ListenerId = addContextListenerResponse.Id!,
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.RemoveContextListener,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<RemoveContextListenerResponse>(_options);
         response.Should().NotBeNull();
@@ -1747,9 +1745,9 @@ public class EndToEndTests : IAsyncLifetime
             ContextType = null
         };
 
-        var addContextListenerResult = await _messageRouter.InvokeAsync(
+        var addContextListenerResult = await _messaging.InvokeAsync(
             Fdc3Topic.AddContextListener,
-            MessageBuffer.Factory.CreateJson(addContextListenerRequest, _options));
+            JsonFactory.CreateJson(addContextListenerRequest, _options));
 
         var addContextListenerResponse = addContextListenerResult!.ReadJson<AddContextListenerResponse>(_options);
         addContextListenerResponse.Should().NotBeNull();
@@ -1762,9 +1760,9 @@ public class EndToEndTests : IAsyncLifetime
             ListenerId = addContextListenerResponse.Id!,
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.RemoveContextListener,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<RemoveContextListenerResponse>(_options);
 
@@ -1777,9 +1775,9 @@ public class EndToEndTests : IAsyncLifetime
     {
         OpenRequest? request = null;
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.Open,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<OpenResponse>(_options);
 
@@ -1795,9 +1793,9 @@ public class EndToEndTests : IAsyncLifetime
             InstanceId = "NotExistentId"
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.Open,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<OpenResponse>(_options);
 
@@ -1820,9 +1818,9 @@ public class EndToEndTests : IAsyncLifetime
             }
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.Open,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<OpenResponse>(_options);
 
@@ -1846,9 +1844,9 @@ public class EndToEndTests : IAsyncLifetime
             Context = JsonSerializer.Serialize(new Context("fdc3.instrument"))
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.Open,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<OpenResponse>(_options);
 
@@ -1872,9 +1870,9 @@ public class EndToEndTests : IAsyncLifetime
             }
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.Open,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<OpenResponse>(_options);
 
@@ -1890,9 +1888,9 @@ public class EndToEndTests : IAsyncLifetime
     {
         GetOpenedAppContextRequest? request = null;
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.GetOpenedAppContext,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<GetOpenedAppContextResponse>(_options);
 
@@ -1908,9 +1906,9 @@ public class EndToEndTests : IAsyncLifetime
             ContextId = "NotValidId"
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.GetOpenedAppContext,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<GetOpenedAppContextResponse>(_options);
 
@@ -1926,9 +1924,9 @@ public class EndToEndTests : IAsyncLifetime
             ContextId = Guid.NewGuid().ToString(),
         };
 
-        var result = await _messageRouter.InvokeAsync(
+        var result = await _messaging.InvokeAsync(
             Fdc3Topic.GetOpenedAppContext,
-            MessageBuffer.Factory.CreateJson(request, _options));
+            JsonFactory.CreateJson(request, _options));
 
         var response = result!.ReadJson<GetOpenedAppContextResponse>(_options);
 
@@ -1936,12 +1934,11 @@ public class EndToEndTests : IAsyncLifetime
         response!.Error.Should().Be(Fdc3DesktopAgentErrors.OpenedAppContextNotFound);
     }
 
-
-    private MessageBuffer GetContext()
+    private string GetContext()
     {
-        return MessageBuffer.Factory.CreateJson(
+        return JsonFactory.CreateJson(
             new Contact(
-                new ContactID {Email = $"test{_counter}@test.org", FdsId = $"test{_counter++}"},
+                new ContactID { Email = $"test{_counter}@test.org", FdsId = $"test{_counter++}" },
                 name: "Testy Tester"), _options);
     }
 }

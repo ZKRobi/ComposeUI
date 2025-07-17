@@ -11,23 +11,21 @@
  * or implied. See the License for the specific language governing permissions
  * and limitations under the License.
  */
-
-using System;
+ 
 using System.Text.Json;
 using Finos.Fdc3;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Contracts;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Converters;
-using MorganStanley.ComposeUI.Messaging;
-using MorganStanley.ComposeUI.Messaging.Abstractions;
+using MorganStanley.ComposeUI.MessagingAdapter.Abstractions;
 
 namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Infrastructure.Internal;
 
-internal class ResolverUIMessageRouterCommunicator : IResolverUICommunicator
+internal class ResolverUICommunicator : IResolverUICommunicator
 {
-    private readonly ILogger<ResolverUIMessageRouterCommunicator> _logger;
-    private readonly IMessageRouter _messageRouter;
+    private readonly ILogger<ResolverUICommunicator> _logger;
+    private readonly IMessaging _messaging;
     private readonly TimeSpan _defaultTimeout = TimeSpan.FromMinutes(2);
 
     private readonly JsonSerializerOptions _jsonSerializerOptions = new()
@@ -35,12 +33,12 @@ internal class ResolverUIMessageRouterCommunicator : IResolverUICommunicator
         Converters = { new AppMetadataJsonConverter() }
     };
 
-    public ResolverUIMessageRouterCommunicator(
-        IMessageRouter messageRouter,
-        ILogger<ResolverUIMessageRouterCommunicator>? logger = null)
+    public ResolverUICommunicator(
+        IMessaging messaging,
+        ILogger<ResolverUICommunicator>? logger = null)
     {
-        _messageRouter = messageRouter;
-        _logger = logger ?? NullLogger<ResolverUIMessageRouterCommunicator>.Instance;
+        _messaging = messaging;
+        _logger = logger ?? NullLogger<ResolverUICommunicator>.Instance;
     }
 
     public async Task<ResolverUIResponse?> SendResolverUIRequest(IEnumerable<IAppMetadata> appMetadata, CancellationToken cancellationToken = default)
@@ -53,7 +51,7 @@ internal class ResolverUIMessageRouterCommunicator : IResolverUICommunicator
         {
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug(ex, "MessageRouter didn't receive response from the ResolverUI.");
+                _logger.LogDebug(ex, "No answer was received using the communication layer.");
             }
 
             return new ResolverUIResponse()
@@ -70,9 +68,9 @@ internal class ResolverUIMessageRouterCommunicator : IResolverUICommunicator
             AppMetadata = appMetadata
         };
 
-        var responseBuffer = await _messageRouter.InvokeAsync(
+        var responseBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.ResolverUI,
-            MessageBuffer.Factory.CreateJson(request, _jsonSerializerOptions),
+            JsonFactory.CreateJson(request, _jsonSerializerOptions),
             cancellationToken: cancellationToken);
 
         if (responseBuffer == null)
@@ -97,7 +95,7 @@ internal class ResolverUIMessageRouterCommunicator : IResolverUICommunicator
         {
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug(ex, "MessageRouter didn't receive response from the ResolverUI.");
+                _logger.LogDebug(ex, "No answer was received using the communication layer.");
             }
 
             return new ResolverUIIntentResponse
@@ -114,9 +112,9 @@ internal class ResolverUIMessageRouterCommunicator : IResolverUICommunicator
             Intents = intents
         };
 
-        var responseBuffer = await _messageRouter.InvokeAsync(
+        var responseBuffer = await _messaging.InvokeAsync(
             Fdc3Topic.ResolverUIIntent,
-            MessageBuffer.Factory.CreateJson(request, _jsonSerializerOptions),
+            JsonFactory.CreateJson(request, _jsonSerializerOptions),
             cancellationToken: cancellationToken);
 
         if (responseBuffer == null)
