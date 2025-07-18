@@ -11,7 +11,7 @@
 // and limitations under the License.
 
 using MorganStanley.ComposeUI.MessagingAdapter;
-using MorganStanley.ComposeUI.MessagingAdapter.Abstractions;
+using MorganStanley.ComposeUI.Messaging.Abstractions;
 
 namespace Microsoft.Extensions.DependencyInjection;
 

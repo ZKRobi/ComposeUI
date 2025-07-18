@@ -17,7 +17,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Contracts;
 using System.Collections.Concurrent;
-using MorganStanley.ComposeUI.MessagingAdapter.Abstractions;
+using MorganStanley.ComposeUI.Messaging.Abstractions;
 
 namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Channels
 {
@@ -33,13 +33,17 @@ namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Channels
         private string? _lastContext = null;
         private IAsyncDisposable? _broadcastSubscription;
         private bool _disposed = false;
+        private JsonSerializerOptions _jsonSerializerOptions;
 
-        protected Channel(string id, IMessaging messagingService, ILogger logger, ChannelTopics topics)
+        private IAsyncDisposable? _getCurrentContextService;
+
+        protected Channel(string id, IMessaging messagingService, JsonSerializerOptions jsonSerializerOptions, ILogger logger, ChannelTopics topics)
         {
             Id = id;
             MessagingService = messagingService;
             _logger = logger;
             _topics = topics;
+            _jsonSerializerOptions = jsonSerializerOptions;
         }
 
         public async ValueTask Connect()
@@ -49,12 +53,9 @@ namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Channels
                 throw new ObjectDisposedException(nameof(Channel));
             }
 
-            await MessagingService.ConnectAsync();
+            _getCurrentContextService = await MessagingService.RegisterJsonServiceAsync<GetCurrentContextRequest, string?>(_topics.GetCurrentContext, GetCurrentContext, _jsonSerializerOptions);
 
-            await MessagingService.RegisterServiceAsync(_topics.GetCurrentContext, GetCurrentContext);
-
-            var broadcastHandler = new Func<string?, ValueTask>(HandleBroadcast);
-            var broadcastSubscription = MessagingService.SubscribeAsync(_topics.Broadcast, broadcastHandler);
+            var broadcastSubscription = MessagingService.SubscribeAsync(_topics.Broadcast, HandleBroadcast);
 
             _broadcastSubscription = await broadcastSubscription;
 
@@ -109,24 +110,18 @@ namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Channels
             }
         }
 
-        internal ValueTask<string?> GetCurrentContext(string endpoint, string payloadBuffer, MessageAdapterContext? context)
+        internal ValueTask<string?> GetCurrentContext(GetCurrentContextRequest? request)
         {
             lock (_contextsLock)
             {
-                if (payloadBuffer == null)
+                if (request?.ContextType == null)
                 {
                     return new ValueTask<string?>(_lastContext);
                 }
 
-                var payload = payloadBuffer.ReadJson<GetCurrentContextRequest>(new(JsonSerializerDefaults.Web));
-                if (payload?.ContextType == null)
-                {
-                    return new ValueTask<string?>(_lastContext);
-                }
-
-                return _contexts.TryGetValue(payload.ContextType, out var messageBuffer)
+                return _contexts.TryGetValue(request.ContextType, out var messageBuffer)
                     ? new ValueTask<string?>(messageBuffer)
-                    : new ValueTask<string?>((string?)null);
+                    : new ValueTask<string?>((string?) null);
             }
         }
 
@@ -139,7 +134,11 @@ namespace MorganStanley.ComposeUI.Fdc3.DesktopAgent.Channels
 
             _broadcastSubscription = null;
 
-            await MessagingService.UnregisterServiceAsync(_topics.GetCurrentContext);
+            if (_getCurrentContextService != null)
+            {
+                await _getCurrentContextService.DisposeAsync();
+            }
+            _getCurrentContextService = null;
 
             _disposed = true;
         }

@@ -29,7 +29,7 @@ using MorganStanley.ComposeUI.Fdc3.AppDirectory;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.DependencyInjection;
 using MorganStanley.ComposeUI.LayoutPersistence;
 using MorganStanley.ComposeUI.LayoutPersistence.Abstractions;
-using MorganStanley.ComposeUI.Messaging;
+using MorganStanley.ComposeUI.Messaging.Abstractions;
 using MorganStanley.ComposeUI.ModuleLoader;
 using MorganStanley.ComposeUI.Shell.Abstractions;
 using MorganStanley.ComposeUI.Shell.Fdc3;
@@ -134,11 +134,11 @@ public partial class App : Application
         var diagnostics = new DiagnosticInfo
         {
             StartupTime = DateTime.Now,
-            ShellVersion = Assembly.GetExecutingAssembly().FullName
+            ShellVersion = Assembly.GetExecutingAssembly().FullName!
         };
 
-        await _host.Services.GetRequiredService<IMessageRouter>().RegisterServiceAsync("Diagnostics", (e, m, t) => 
-            ValueTask.FromResult(MessageBuffer.Factory.CreateJson(diagnostics).GetString())!);
+        var messaging = _host.Services.GetRequiredService<IMessaging>();
+        await messaging.RegisterJsonServiceAsync<object, DiagnosticInfo>("Diagnostics", (_) => ValueTask.FromResult(diagnostics)!, new JsonSerializerOptions(JsonSerializerDefaults.Web));
 
         await OnHostInitializedAsync();
 
@@ -180,6 +180,7 @@ public partial class App : Application
                     .UseAccessToken(MessageRouterAccessToken));
 
             services.AddTransient<IStartupAction, MessageRouterStartupAction>();
+            services.AddMessageRouterMessagingAdapter();
         }
 
         void ConfigureModules()
@@ -213,7 +214,6 @@ public partial class App : Application
                     fdc3ConfigurationSection.GetSection(nameof(fdc3Options.DesktopAgent)));
                 services.Configure<AppDirectoryOptions>(
                     fdc3ConfigurationSection.GetSection(nameof(fdc3Options.AppDirectory)));
-                services.AddMessageRouterMessagingAdapter();
             }
         }
     }

@@ -21,7 +21,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Contracts;
 using MorganStanley.ComposeUI.Fdc3.DesktopAgent.Converters;
-using MorganStanley.ComposeUI.Messaging;
 using MorganStanley.ComposeUI.Messaging.Abstractions;
 
 namespace MorganStanley.ComposeUI.Shell.Fdc3.ResolverUI;
@@ -29,13 +28,14 @@ namespace MorganStanley.ComposeUI.Shell.Fdc3.ResolverUI;
 internal class ResolverUIService : IHostedService
 {
     private readonly object _disposeLock = new();
-
+    private readonly IAsyncDisposable? _resolverUiService;
+    private readonly IAsyncDisposable? _resolverUiIntentService;
     private readonly List<Func<ValueTask>> _disposeTask = new();
     private readonly IHost _host;
 
     private readonly JsonSerializerOptions _jsonSerializerOptions = new()
     {
-        Converters = {new AppMetadataJsonConverter(), new IconJsonConverter()}
+        Converters = { new AppMetadataJsonConverter(), new IconJsonConverter() }
     };
 
     private readonly IResolverUIProjector _resolverUIWindow;
@@ -74,38 +74,34 @@ internal class ResolverUIService : IHostedService
 
     private async Task StartMessageRouterServiceAsync(CancellationToken cancellationToken)
     {
-        var messageRouter = _host.Services.GetRequiredService<IMessageRouter>();
+        var messageRouter = _host.Services.GetRequiredService<IMessaging>();
 
-        await messageRouter.RegisterServiceAsync(
+        await messageRouter.RegisterJsonServiceAsync<ResolverUIRequest, ResolverUIResponse>(
             "ComposeUI/fdc3/v2.0/resolverUI",
-            async (endpoint, payload, context) =>
+            async (request) =>
             {
-                var request = payload?.ReadJson<ResolverUIRequest>(_jsonSerializerOptions);
                 if (request == null)
                 {
-                    return null;
+                    throw new ArgumentNullException(nameof(request));
                 }
 
-                var response = await ShowResolverUI(request.AppMetadata);
-
-                return response is null ? null : MessageBuffer.Factory.CreateJson(response, _jsonSerializerOptions);
+                return await ShowResolverUI(request.AppMetadata);
             },
-            cancellationToken: cancellationToken);
+            _jsonSerializerOptions,
+            cancellationToken);
 
-        await messageRouter.RegisterServiceAsync(
+        await messageRouter.RegisterJsonServiceAsync<ResolverUIIntentRequest, ResolverUIIntentResponse>(
             "ComposeUI/fdc3/v2.0/resolverUIIntent",
-            async (endpoint, payload, context) =>
+            async (request) =>
             {
-                var request = payload?.ReadJson<ResolverUIIntentRequest>(_jsonSerializerOptions);
                 if (request == null)
                 {
-                    return null;
+                    throw new ArgumentNullException(nameof(request));
                 }
 
-                var response = await ShowResolverUI(request.Intents!);
-
-                return response is null ? null : MessageBuffer.Factory.CreateJson(response, _jsonSerializerOptions);
+                return await ShowResolverUI(request.Intents!);
             },
+            _jsonSerializerOptions,
             cancellationToken: cancellationToken);
 
         lock (_disposeLock)
@@ -113,12 +109,8 @@ internal class ResolverUIService : IHostedService
             _disposeTask.Add(
                 async () =>
                 {
-                    if (messageRouter != null)
-                    {
-                        await messageRouter.UnregisterServiceAsync("ComposeUI/fdc3/v2.0/resolverUI", cancellationToken);
-                        await messageRouter.UnregisterServiceAsync("ComposeUI/fdc3/v2.0/resolverUIIntent", cancellationToken);
-                        await messageRouter.DisposeAsync();
-                    }
+                    await _resolverUiService!.DisposeAsync();
+                    await _resolverUiIntentService!.DisposeAsync();
                 });
         }
     }

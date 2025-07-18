@@ -12,7 +12,7 @@
 
 namespace MorganStanley.ComposeUI.Messaging.Abstractions;
 
-public interface IMessagingService : IAsyncDisposable
+public interface IMessaging
 {
     /// <summary>
     /// Gets the client ID of the current connection.
@@ -23,17 +23,6 @@ public interface IMessagingService : IAsyncDisposable
     public string? ClientId { get; }
 
     /// <summary>
-    /// Asynchronously connects to the Message Router server endpoint.
-    /// </summary>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    /// <remarks>
-    /// Clients don't need to call this method before calling other methods on this type.
-    /// The client should automatically establish a connection when needed.
-    /// </remarks>
-    public ValueTask ConnectAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
     /// Gets an observable that represents a topic.
     /// </summary>
     /// <param name="topic"></param>
@@ -41,7 +30,7 @@ public interface IMessagingService : IAsyncDisposable
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     public ValueTask<IAsyncDisposable> SubscribeAsync(string topic, 
-        Func<IMessageBuffer, ValueTask> subscriber, 
+        MessageHandler subscriber, 
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -52,41 +41,23 @@ public interface IMessagingService : IAsyncDisposable
     /// <param name="options"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public ValueTask PublishAsync(string topic, 
-        IMessageBuffer? message = null, 
-        PublishOptions optinos = default, 
-        CancellationToken cancellationToken = default);
+    public ValueTask PublishAsync(string topic, string message, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Registers a service by providing a name and handler.
     /// </summary>
-    /// <param name="endpoint"></param>
+    /// <param name="serviceName"></param>
     /// <param name="subscriber"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public ValueTask RegisterServiceAsync(string endpoint,
-        Func<string, IMessageBuffer?, MessageContext?, ValueTask<IMessageBuffer?>> subscriber,
-        CancellationToken cancellationToken = default);
+    public ValueTask<IAsyncDisposable> RegisterServiceAsync(string serviceName, ServiceHandler subscriber, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Removes a service registration.
+    /// Invoke a named service.
     /// </summary>
-    /// <param name="endpoint"></param>
+    /// <param name="serviceName">The name of the service registered to Messaging via RegisterServiceAsync</param>
+    /// <param name="payload">Data to pass on to the service</param>
     /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    public ValueTask UnregisterServiceAsync(string endpoint, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    ///     Invokes a named service.
-    /// </summary>
-    /// <param name="endpoint"></param>
-    /// <param name="payload"></param>
-    /// <param name="options"></param>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    public ValueTask<IMessageBuffer?> InvokeAsync(
-        string endpoint,
-        IMessageBuffer? payload = null,
-        InvokeOptions options = default,
-        CancellationToken cancellationToken = default);
+    /// <returns>The response from the service</returns>
+    public ValueTask<string?> InvokeServiceAsync(string serviceName, string? payload = null, CancellationToken cancellationToken = default);
 }
